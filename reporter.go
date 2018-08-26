@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"gopkg.in/tomb.v2"
 	"net"
 	"os"
 	"runtime"
@@ -11,24 +10,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/gopacket/pcap"
+
+	"gopkg.in/tomb.v2"
+
 	"github.com/DataDog/datadog-go/statsd"
 	log "github.com/cihub/seelog"
 )
 
 type Client struct {
-	client *statsd.Client
-	ip     net.IP
-	port   int32
-	sleep  int32
-	flows  *FlowMap
-	tags   []string
-	lookup map[string]string
-	t      tomb.Tomb
+	client        *statsd.Client
+	pstatsHandler *pcap.Handle
+	ip            net.IP
+	port          int32
+	sleep         int32
+	flows         *FlowMap
+	tags          []string
+	lookup        map[string]string
+	t             tomb.Tomb
 }
 
 const (
 	statsdBufflen = 5
 	statsdSleep   = 30
+
+	packetsDroppedMetric   = "system.net.tcp.packets.dropped"
+	packetsIfDroppedMetric = "system.net.tcp.packets.ifdropped"
+	packetsReceivedMetric  = "system.net.tcp.packets.received"
 )
 
 func memorySize() (uint64, error) {
@@ -131,6 +139,17 @@ func (r *Client) Report() error {
 			if pct >= FORCE_FLUSH_PCT { //memory out of control
 				flush = true
 				log.Warnf("Forcing flush - memory consumption above maximum allowed system usage: %v %%", pct*100)
+			}
+
+			// Report handler packet stats
+			log.Warnf("r.pstatsHandler: ", r.pstatsHandler)
+			if r.pstatsHandler != nil {
+				stats, err := r.pstatsHandler.Stats()
+				if err == nil {
+					r.submit(packetsDroppedMetric, packetsDroppedMetric, float64(stats.PacketsDropped), r.tags, false)
+					r.submit(packetsIfDroppedMetric, packetsIfDroppedMetric, float64(stats.PacketsIfDropped), r.tags, false)
+					r.submit(packetsReceivedMetric, packetsReceivedMetric, float64(stats.PacketsReceived), r.tags, false)
+				}
 			}
 
 			r.flows.Lock()

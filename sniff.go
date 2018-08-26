@@ -135,6 +135,7 @@ func (d *MetroSniffer) Running() bool {
 
 func (d *MetroSniffer) SetPcapHandle(handle *pcap.Handle) {
 	d.pcapHandle = handle
+	d.reporter.pstatsHandler = d.pcapHandle
 }
 
 func (d *MetroSniffer) handlePacket(data []byte, ci *gopacket.CaptureInfo) error {
@@ -339,6 +340,7 @@ func (d *MetroSniffer) Sniff() error {
 				return err
 			}
 			d.pcapHandle = handle
+			d.reporter.pstatsHandler = handle
 		} else {
 			handle, err := pcap.OpenOffline(d.config.Pcap)
 			if err != nil {
@@ -348,6 +350,7 @@ func (d *MetroSniffer) Sniff() error {
 				return err
 			}
 			d.pcapHandle = handle
+			d.reporter.pstatsHandler = handle
 		}
 	}
 
